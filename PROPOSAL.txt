@@ -1,9 +1,14 @@
 Team members:
-
+Dhruva Karkada
+Michael Yu
 
 
 What will you do?
+We will be creating an emoji-based programming language (similar to fun),
+and build a compiler for it in Rust. The language will have all the features
+that the fun language had, and some more. The following extra features
+are the goal:
 
-
-
-
+- arguments for functions
+- basic type system
+- support for strings
