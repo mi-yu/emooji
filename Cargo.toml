@@ -1,0 +1,6 @@
+[package]
+name = "emooji"
+version = "0.1.0"
+authors = ["Michael Yu <m.yu8088@gmail.com>", "Dhruva Karkada"]
+
+[dependencies]
