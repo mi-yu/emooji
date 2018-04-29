@@ -2,22 +2,51 @@ use std::error::Error;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
+use std::env;
+
+mod tokenizer;
+use tokenizer::Tokenizer;
 
 fn main() {
-    println!("Hello, world!");
-    let path = Path::new("lorem_ipsum.txt");
-    // Open a file in write-only mode, returns `io::Result<File>`
-    let mut file = match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}",
-                       	    path.display(),
+    // parse arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        panic!("Incorrect number of arguments.");
+    }
+
+    // read from .moo file
+    let path = format!("{}{}", &args[1], ".moo");
+    let path = Path::new(&path);
+    let mut file = match File::open(&path) {
+        Err(why) => panic!("Couldn't open .moo file: {}",
                             why.description()),
         Ok(file) => file,
     };
-    gen_data(&mut file);
-    gen_code(&mut file);
+    let mut program_contents = String::with_capacity(500);
+    match file.read_to_string(&mut program_contents) {
+        Err(why) => panic!("Couldn't read .moo file: {}",
+                            why.description()),
+        Ok(_) => {},
+    };
+
+    // create Tokenizer
+    let mut tokenizer = Tokenizer::new(program_contents);
+
+    // create assembly file
+    let path = format!("{}{}", &args[1], ".s");
+    let path = Path::new(&path);
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("Couldn't create .s file: {}",
+                            why.description()),
+        Ok(file) => file,
+    };
+
+    // start compilation
+    gen_data(&mut file, &mut tokenizer);
+    gen_code(&mut file, &mut tokenizer);
 }
 
-fn gen_data(file: &mut File){
+fn gen_data(file: &mut File, tokenizer: &mut Tokenizer){
     let content = ".data\n\
                     \t\targc_: .quad 0\n\
                     \t\tFormat: .byte '%', 'l', 'u', 10, 0\n\
@@ -29,10 +58,17 @@ fn gen_data(file: &mut File){
         },
         Ok(_) => {},
     }
+    let mut tkn = tokenizer.get_token();
+    while !(tkn.is("END")) {
+        if tkn.is("ID") {
+            println!("{:?}", tkn);
+        }
+        tkn = tokenizer.get_token();
+    }
 }
 
-fn gen_code(file: &mut File){
-    let content = ".text\n\
+fn gen_code(file: &mut File, tokenizer: &mut Tokenizer){
+    let content = "\n\n.text\n\
                     .global main\n\
                     .extern printf\n\
                     .extern malloc\n\
