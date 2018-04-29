@@ -13,20 +13,47 @@ fn main() {
                             why.description()),
         Ok(file) => file,
     };
-    gen_data(&mut file, path);
+    gen_data(&mut file);
+    gen_code(&mut file);
 }
 
-fn gen_data(file: &mut File, path: &Path){
+fn gen_data(file: &mut File){
     let content = ".data\n\
                     \t\targc_: .quad 0\n\
-                    \t\tFormat: .byte '%%', 'l', 'u', 10, 0\n\
+                    \t\tFormat: .byte '%', 'l', 'u', 10, 0\n\
                     \t\tFuncTable: .quad 0\n\
                     \t\tFuncCall: .quad 0\n";
     match file.write_all(content.as_bytes()) {
         Err(why) => {
-            panic!("couldn't write to {:?}: {}", path,
-                                               why.description())
+            panic!("couldn't write to file: {}", why.description())
         },
-        Ok(_) => println!("successfully wrote to {:?}", path),
+        Ok(_) => {},
+    }
+}
+
+fn gen_code(file: &mut File){
+    let content = ".text\n\
+                    .global main\n\
+                    .extern printf\n\
+                    .extern malloc\n\
+                    main:\n\
+                    \t\tmovq %rdi, argc_\n\
+                    \t\tmovq $16000, %rdi\n\
+                    \t\tcall malloc\n\
+                    \t\tmovq %rax, FuncTable\n";
+    match file.write_all(content.as_bytes()) {
+        Err(why) => {
+            panic!("couldn't write to file: {}", why.description())
+        },
+        Ok(_) => {},
+    }
+    // load_token(code_text);
+    // init funcs;
+    // seq();
+    match file.write_all("\t\tretq\n".as_bytes()) {
+        Err(why) => {
+            panic!("couldn't write to file: {}", why.description())
+        },
+        Ok(_) => {},
     }
 }
