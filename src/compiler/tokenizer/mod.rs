@@ -80,20 +80,22 @@ impl Tokenizer {
     pub fn start(&mut self) {
         let mut tkn = Token::new();
 
-        println!("{:?}\n {}", &self.program, self.program.len());
+        // println!("{:?}\n {}", &self.program, self.program.len());
 
         while tkn.kind != TokenType::END {
+            // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos] as u8);
+            // println!("{:?}", tkn);
             tkn = self.get_token();
-            println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos] as u8);
         }
     }
 
+    pub fn reset(&mut self) {
+        self.pos = 0;
+        self.state = TokenizerState::NONE;
+    }
+
     pub fn get_token(&mut self) -> Token{
-        let mut tkn = Token {
-            kind: TokenType::NONE,
-            value_int: 0,
-            value_str: String::from("")
-        };
+        let mut tkn = Token::new();
 
         let mut pos = self.pos;
         pos = self.fast_forward_whitespace(pos);
@@ -160,7 +162,7 @@ impl Tokenizer {
         }
 
         self.normalize_pos_and_state(tkn.kind);
-
+        // println!("{:?}", tkn);
         tkn
     }
 
