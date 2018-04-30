@@ -4,14 +4,55 @@ use self::tokenizer_util::is_emoji;
 use self::tokenizer_util::is_keycap;
 use self::tokenizer_util::get_keycap_val;
 
-mod token_types;
-use self::token_types::TokenType;
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum TokenType {
+    BOOL,
+    CALL,
+    DIV,
+    ELSE,
+    END,
+    EQ,
+    EQEQ,
+    FALSE,
+    FUN,
+    ID,
+    IF,
+    INT,
+    LBRACE,
+    LEND,
+    LPAREN,
+    MUL,
+    MINUS,
+    NEW,
+    NONE,
+    NOT,
+    PLUS,
+    PRINT,
+    RAND,
+    RBRACE,
+    RPAREN,
+    STR,
+    SWAP,
+    TRUE,
+    VAL,
+    WHILE,
+}
 
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenType,
     pub value_int: u64,
     pub value_str: String
+}
+
+impl Clone for Token {
+    fn clone(&self) -> Token {
+        Token {
+            kind: self.kind,
+            value_int: self.value_int,
+            value_str: self.value_str.clone()
+        }
+    }
 }
 
 impl Token {
@@ -23,42 +64,43 @@ impl Token {
         }
     }
 
-    pub fn is(&self, test_kind: &str) -> bool{
-        match &test_kind.to_uppercase()[..] {
-            "ELSE" => return self.kind == TokenType::ELSE,
-            "IF" => return self.kind == TokenType::IF,
-            "RPAREN" => return self.kind == TokenType::RPAREN,
-            "LPAREN" => return self.kind == TokenType::LPAREN,
-            "RAND" => return self.kind == TokenType::RAND,
-            "NOT" => return self.kind == TokenType::NOT,
-            "EQ" => return self.kind == TokenType::EQ,
-            "EQEQ" => return self.kind == TokenType::EQEQ,
-            "MUL" => return self.kind == TokenType::MUL,
-            "DIV" => return self.kind == TokenType::DIV,
-            "PLUS" => return self.kind == TokenType::PLUS,
-            "MINUS" => return self.kind == TokenType::MINUS,
-            "SWAP" => return self.kind == TokenType::SWAP,
-            "NEW" => return self.kind == TokenType::NEW,
-            "TRUE" => return self.kind == TokenType::TRUE,
-            "FALSE" => return self.kind == TokenType::FALSE,
-            "BOOL" => return self.kind == TokenType::BOOL,
-            "INT" => return self.kind == TokenType::INT,
-            "STR" => return self.kind == TokenType::STR,
-            "LEND" => return self.kind == TokenType::LEND,
-            "WHILE" => return self.kind == TokenType::WHILE,
-            "PRINT" => return self.kind == TokenType::PRINT,
-            "CALL" => return self.kind == TokenType::CALL,
-            "ID" => return self.kind == TokenType::ID,
-            "VAL" => return self.kind == TokenType::VAL,
-            "END" => return self.kind == TokenType::END,
-            _ => panic!("Not a valid type: {}", test_kind),
-        }
-    }
+    // pub fn is(&self, test_kind: &str) -> bool{
+    //     match &test_kind.to_uppercase()[..] {
+    //         "ELSE" => return self.kind == TokenType::ELSE,
+    //         "IF" => return self.kind == TokenType::IF,
+    //         "RPAREN" => return self.kind == TokenType::RPAREN,
+    //         "LPAREN" => return self.kind == TokenType::LPAREN,
+    //         "RAND" => return self.kind == TokenType::RAND,
+    //         "NOT" => return self.kind == TokenType::NOT,
+    //         "EQ" => return self.kind == TokenType::EQ,
+    //         "EQEQ" => return self.kind == TokenType::EQEQ,
+    //         "MUL" => return self.kind == TokenType::MUL,
+    //         "DIV" => return self.kind == TokenType::DIV,
+    //         "PLUS" => return self.kind == TokenType::PLUS,
+    //         "MINUS" => return self.kind == TokenType::MINUS,
+    //         "SWAP" => return self.kind == TokenType::SWAP,
+    //         "NEW" => return self.kind == TokenType::NEW,
+    //         "TRUE" => return self.kind == TokenType::TRUE,
+    //         "FALSE" => return self.kind == TokenType::FALSE,
+    //         "BOOL" => return self.kind == TokenType::BOOL,
+    //         "INT" => return self.kind == TokenType::INT,
+    //         "STR" => return self.kind == TokenType::STR,
+    //         "LEND" => return self.kind == TokenType::LEND,
+    //         "WHILE" => return self.kind == TokenType::WHILE,
+    //         "PRINT" => return self.kind == TokenType::PRINT,
+    //         "CALL" => return self.kind == TokenType::CALL,
+    //         "ID" => return self.kind == TokenType::ID,
+    //         "VAL" => return self.kind == TokenType::VAL,
+    //         "END" => return self.kind == TokenType::END,
+    //         _ => panic!("Not a valid type: {}", test_kind),
+    //     }
+    // }
 }
 
 #[derive(Debug, PartialEq)]
 enum TokenizerState {
     DEFINING,
+    DEFINED,
     NONE
 }
 
@@ -77,21 +119,19 @@ impl Tokenizer {
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn tokenize(&mut self) -> Vec<Token> {
         let mut tkn = Token::new();
-
+        let mut tokens = Vec::new();
         // println!("{:?}\n {}", &self.program, self.program.len());
 
         while tkn.kind != TokenType::END {
-            // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos] as u8);
             // println!("{:?}", tkn);
             tkn = self.get_token();
+            tokens.push(tkn.clone())
+            // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos] as u8);
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.pos = 0;
-        self.state = TokenizerState::NONE;
+        // println!("{:?}", tokens);
+        return tokens;
     }
 
     pub fn get_token(&mut self) -> Token{
@@ -128,7 +168,7 @@ impl Tokenizer {
                 '📞' => tkn.kind = TokenType::CALL,
                 _ => {
                     // Handle variable names
-                    if self.state == TokenizerState::DEFINING {
+                    if self.state == TokenizerState::DEFINING || self.state == TokenizerState::DEFINED {
                         tkn.kind = TokenType::ID;
                         let (end_pos, id) = self.create_id(pos);
                         pos = end_pos;
@@ -146,7 +186,9 @@ impl Tokenizer {
                             }
                             pos -= 1;
                         } else { // Handle make string
-                            while pos < prog.len() && !prog[pos].is_whitespace() {
+                            // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos]);
+
+                            while pos < prog.len() && is_emoji(prog[pos]) {
                                 tkn.value_str.push(prog[pos]);
                                 pos += 1;
                             }
@@ -174,6 +216,15 @@ impl Tokenizer {
         if kind == TokenType::BOOL || kind == TokenType::INT || kind == TokenType::STR {
             self.state = TokenizerState::DEFINING;
         }
+
+        if self.state == TokenizerState::DEFINED {
+            self.state = TokenizerState::NONE;
+        }
+        
+        if kind == TokenType::VAL {
+            self.state = TokenizerState::DEFINED;
+        }
+
     }
 
     fn fast_forward_whitespace(&mut self, start: usize) -> usize {
