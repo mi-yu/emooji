@@ -9,9 +9,9 @@ use self::token_types::TokenType;
 
 #[derive(Debug)]
 pub struct Token {
-    kind: TokenType,
-    value_int: u64,
-    value_str: String
+    pub kind: TokenType,
+    pub value_int: u64,
+    pub value_str: String
 }
 
 impl Token {

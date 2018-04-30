@@ -47,23 +47,38 @@ fn main() {
 }
 
 fn gen_data(file: &mut File, tokenizer: &mut Tokenizer){
-    let content = ".data\n\
+    let mut content = ".data\n\
                     \t\targc_: .quad 0\n\
                     \t\tFormat: .byte '%', 'l', 'u', 10, 0\n\
                     \t\tFuncTable: .quad 0\n\
                     \t\tFuncCall: .quad 0\n";
-    match file.write_all(content.as_bytes()) {
-        Err(why) => {
-            panic!("couldn't write to file: {}", why.description())
-        },
-        Ok(_) => {},
-    }
+    let mut vars: Vec<(String, VarType)> = Vec::new();
     let mut tkn = tokenizer.get_token();
     while !(tkn.is("END")) {
-        if tkn.is("ID") {
-            println!("{:?}", tkn);
+        if tkn.is("NEW") {
+            tkn = tokenizer.get_token();
+            let vt:VarType;
+            if tkn.is("BOOL") {
+                vt = VarType::BOOL;
+            }
+            else if tkn.is("INT") {
+                vt = VarType::INT;
+            }
+            else if tkn.is("STR") {
+                vt = VarType::STR;
+            }
+            else {
+                panic!("Bad instantiation: found NEW keyword without type.");
+            }
+            tkn = tokenizer.get_token();
+            if tkn.is("ID") {
+                vars.push((tkn.value_str, vt));
+            }
         }
         tkn = tokenizer.get_token();
+    }
+    if let Err(why) = file.write_all(content.as_bytes()) {
+        panic!("couldn't write to file: {}", why.description());
     }
 }
 
@@ -77,19 +92,20 @@ fn gen_code(file: &mut File, tokenizer: &mut Tokenizer){
                     \t\tmovq $16000, %rdi\n\
                     \t\tcall malloc\n\
                     \t\tmovq %rax, FuncTable\n";
-    match file.write_all(content.as_bytes()) {
-        Err(why) => {
-            panic!("couldn't write to file: {}", why.description())
-        },
-        Ok(_) => {},
+    if let Err(why) = file.write_all(content.as_bytes()) {
+        panic!("couldn't write to file: {}", why.description());
     }
     // load_token(code_text);
     // init funcs;
     // seq();
-    match file.write_all("\t\tretq\n".as_bytes()) {
-        Err(why) => {
-            panic!("couldn't write to file: {}", why.description())
-        },
-        Ok(_) => {},
+    if let Err(why) = file.write_all("\t\tretq\n".as_bytes()) {
+        panic!("couldn't write to file: {}", why.description());
     }
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+enum VarType {
+    BOOL,
+    INT,
+    STR
 }
