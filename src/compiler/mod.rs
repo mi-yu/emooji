@@ -4,14 +4,8 @@ use std::io::prelude::*;
 use std::error::Error;
 use std::fs::File;
 use self::tokenizer::TokenType;
+use self::tokenizer::VarType;
 use self::tokenizer::Token;
-
-#[derive(Debug, PartialEq, Copy, Clone)]
-enum VarType {
-    BOOL,
-    INT,
-    STR
-}
 
 pub struct Compiler {
     tokens: Vec<Token>,
@@ -43,6 +37,21 @@ impl Compiler {
         self.tokens[self.pos].clone()
     }
 
+    fn debug_str(&self) -> String {
+        let mut content = format!("token at pos {}: ", self.pos);
+        let mut count = 0;
+        while count < 5 && self.pos+count < self.tokens.len(){
+            content.push_str(&self.tokens[self.pos + count].to_string());
+            count += 1;
+        }
+        content
+    }
+
+    fn annotate_type(&mut self, var_type: VarType, var_count: i32) {
+        self.tokens[self.pos].var_type = var_type;
+        self.tokens[self.pos].var_num = var_count;
+    }
+
     fn reset(&mut self) {
         self.pos = 0;
     }
@@ -61,43 +70,92 @@ impl Compiler {
                     \t\tpop %rax\n");
     }
 
-    pub fn gen_data(&mut self){
-        let content = ".data\n\
+    pub fn gen_data(&mut self) {
+        let mut content = String::from(".data\n\
                         \t\targc_: .quad 0\n\
                         \t\tFormat_ints: .byte '%', 'l', 'u', 10, 0\n\
                         \t\tFormat_strings: .byte '%', 's', 10, 0\n\
                         \t\tFuncTable: .quad 0\n\
-                        \t\tFuncCall: .quad 0\n";
+                        \t\tFuncCall: .quad 0\n");
 
-        let mut vars: Vec<(String, VarType)> = Vec::new();
+        // let mut vars: Vec<String> = Vec::new();
+        let mut var_count = 0;
 
         while self.peek() != TokenType::END {
-            // println!("{:?}", self.current());
             if self.peek() == TokenType::NEW {
                 self.consume();
-                let vt: VarType;
-                match self.peek() {
-                    TokenType::BOOL => vt = VarType::BOOL,
-                    TokenType::INT => vt = VarType::INT,
-                    TokenType::STR => vt = VarType::STR,
-                    _ => panic!("Bad instantiation: found NEW keyword without type.")
+                let var_type = match self.peek() {
+                    TokenType::BOOL => VarType::BOOL,
+                    TokenType::INT => VarType::INT,
+                    TokenType::STR => VarType::STR,
+                    _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
+                        self.debug_str()),
                 };
 
                 self.consume();
-                if self.peek() == TokenType::ID {
-                    vars.push((self.current().value_str, vt));
+                match self.peek() {
+                    TokenType::ID => {
+                        // vars.push(self.current().value_str);
+                        content.push_str(&format!("\t\tvar{}: .quad 0\n", var_count));
+                        self.annotate_type(var_type, var_count);
+                        var_count += 1;
+                    },
+                    _ => panic!("Bad instantiation. No variable name provided: {}", 
+                        self.debug_str()),
                 }
             }
             self.consume();
         }
 
-        // println!("{:?}", vars);
-        self.write(content);
+        self.write(&content);
 
         self.reset();
     }
 
-    pub fn gen_code(&mut self){
+    pub fn check_syntax(&mut self) {
+        while self.peek() != TokenType::END {
+            if self.peek() == TokenType::NEW {
+                self.consume();
+                // remove duplicate code
+
+                self.consume();
+                let var_type = self.current().var_type;
+                // if self.peek() != TokenType::ID{
+                //     panic!("Bad instantiation. No variable name provided: {}", 
+                //         self.debug_str());
+                // }
+
+                self.consume();
+                if self.peek() != TokenType::EQ {
+                    panic!("Bad instantiation. Must assign value to new variable: {}", 
+                        self.debug_str());
+                }
+
+                self.consume();
+                if (self.peek() == TokenType::VAL) || (self.peek() == TokenType::ID) {
+                    if !(self.current().can_convert_to(var_type)){
+                        panic!("Illegal assignment. Cannot convert to {}: {}",
+                            match var_type {
+                                VarType::BOOL => "bool",
+                                VarType::INT => "int",
+                                VarType::STR => "string",
+                                _ => ""
+                            },
+                            self.debug_str());
+                    }
+                }
+                else {
+                    panic!("Illegal assignment. Needs value or id: {}", 
+                        self.debug_str());
+                }
+            }
+            self.consume();
+        }
+
+        self.reset();
+    }
+
+    pub fn gen_code(&mut self) {
         // let mut tokenizer = &self.tokenizer;
         let content = "\n\n.text\n\
                         .global main\n\

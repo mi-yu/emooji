@@ -47,9 +47,10 @@ fn main() {
 
     // start compilation
     compiler.gen_data();
+    // compiler.check_syntax();
     compiler.gen_code();
 
-    // compile and run binary
+    // compile binary
     Command::new("gcc")
     		.arg("-no-pie")
     		.arg("-fno-pie")
@@ -58,9 +59,9 @@ fn main() {
     		.arg(&args[1])
     		.arg(format!("{}{}", &args[1], ".s"))
     		.spawn()
-    		.expect("could not compile .s file");
+    		.expect("could not assemble .s file");
 
-    Command::new(format!("{}{}", "./", &args[1]))
-    		.spawn()
-    		.expect("could not run binary");
+    // Command::new(format!("{}{}", "./", &args[1]))
+    // 		.spawn()
+    // 		.expect("could not run binary");
 }

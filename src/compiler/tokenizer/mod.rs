@@ -13,7 +13,6 @@ pub enum TokenType {
     END,
     EQ,
     EQEQ,
-    FALSE,
     FUN,
     ID,
     IF,
@@ -33,16 +32,26 @@ pub enum TokenType {
     RPAREN,
     STR,
     SWAP,
-    TRUE,
     VAL,
     WHILE,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum VarType {
+    BOOL,
+    INT,
+    STR,
+    NONE,
 }
 
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenType,
     pub value_int: u64,
-    pub value_str: String
+    pub value_str: String,
+    pub var_type: VarType,
+    pub var_num: i32
+
 }
 
 impl Clone for Token {
@@ -50,7 +59,9 @@ impl Clone for Token {
         Token {
             kind: self.kind,
             value_int: self.value_int,
-            value_str: self.value_str.clone()
+            value_str: self.value_str.clone(),
+            var_type: self.var_type,
+            var_num: self.var_num
         }
     }
 }
@@ -60,41 +71,20 @@ impl Token {
         Token {
             kind: TokenType::NONE,
             value_int: 0,
-            value_str: String::from("")
+            value_str: String::from(""),
+            var_type: VarType::NONE,
+            var_num: 0
         }
     }
 
-    // pub fn is(&self, test_kind: &str) -> bool{
-    //     match &test_kind.to_uppercase()[..] {
-    //         "ELSE" => return self.kind == TokenType::ELSE,
-    //         "IF" => return self.kind == TokenType::IF,
-    //         "RPAREN" => return self.kind == TokenType::RPAREN,
-    //         "LPAREN" => return self.kind == TokenType::LPAREN,
-    //         "RAND" => return self.kind == TokenType::RAND,
-    //         "NOT" => return self.kind == TokenType::NOT,
-    //         "EQ" => return self.kind == TokenType::EQ,
-    //         "EQEQ" => return self.kind == TokenType::EQEQ,
-    //         "MUL" => return self.kind == TokenType::MUL,
-    //         "DIV" => return self.kind == TokenType::DIV,
-    //         "PLUS" => return self.kind == TokenType::PLUS,
-    //         "MINUS" => return self.kind == TokenType::MINUS,
-    //         "SWAP" => return self.kind == TokenType::SWAP,
-    //         "NEW" => return self.kind == TokenType::NEW,
-    //         "TRUE" => return self.kind == TokenType::TRUE,
-    //         "FALSE" => return self.kind == TokenType::FALSE,
-    //         "BOOL" => return self.kind == TokenType::BOOL,
-    //         "INT" => return self.kind == TokenType::INT,
-    //         "STR" => return self.kind == TokenType::STR,
-    //         "LEND" => return self.kind == TokenType::LEND,
-    //         "WHILE" => return self.kind == TokenType::WHILE,
-    //         "PRINT" => return self.kind == TokenType::PRINT,
-    //         "CALL" => return self.kind == TokenType::CALL,
-    //         "ID" => return self.kind == TokenType::ID,
-    //         "VAL" => return self.kind == TokenType::VAL,
-    //         "END" => return self.kind == TokenType::END,
-    //         _ => panic!("Not a valid type: {}", test_kind),
-    //     }
-    // }
+    pub fn to_string(&self) -> String {
+        self.value_str.clone()
+    }
+
+    pub fn can_convert_to(&self, other_vt: VarType) -> bool {
+        false
+        // IMPLEMENT
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -142,41 +132,45 @@ impl Tokenizer {
 
         if pos < self.program.len() {
             let prog = &self.program;
-            match prog[pos] {
-                '❌' => tkn.kind = TokenType::ELSE,
-                '❓' => tkn.kind = TokenType::IF,
-                '🌛' => tkn.kind = TokenType::RPAREN,
-                '🌜' => tkn.kind = TokenType::LPAREN,
-                '🎲' => tkn.kind = TokenType::RAND,
-                '🚫' => tkn.kind = TokenType::NOT,
-                '⬅' => tkn.kind = TokenType::EQ,
-                '↔' => tkn.kind = TokenType::EQEQ,
-                '✖' => tkn.kind = TokenType::MUL,
-                '➗' => tkn.kind = TokenType::DIV,
-                '➕' => tkn.kind = TokenType::PLUS,
-                '➖' => tkn.kind = TokenType::MINUS,
-                '🔀' => tkn.kind = TokenType::SWAP,
-                '🆕' => tkn.kind = TokenType::NEW,
-                '👍' => tkn.kind = TokenType::TRUE,
-                '👎' => tkn.kind = TokenType::FALSE,
-                '☯' => tkn.kind = TokenType::BOOL,
-                '🔢' => tkn.kind = TokenType::INT,
-                '🔤' => tkn.kind = TokenType::STR,
-                '🔚' => tkn.kind = TokenType::LEND,
-                '🔁' => tkn.kind = TokenType::WHILE,
-                '📄' => tkn.kind = TokenType::PRINT,
-                '📞' => tkn.kind = TokenType::CALL,
+            tkn.kind = match prog[pos] {
+                '❌' => TokenType::ELSE,
+                '❓' => TokenType::IF,
+                '🌛' => TokenType::RPAREN,
+                '🌜' => TokenType::LPAREN,
+                '🎲' => TokenType::RAND,
+                '🚫' => TokenType::NOT,
+                '⬅'  => TokenType::EQ,
+                '↔'  => TokenType::EQEQ,
+                '✖' => TokenType::MUL,
+                '➗' => TokenType::DIV,
+                '➕' => TokenType::PLUS,
+                '➖' => TokenType::MINUS,
+                '🔀' => TokenType::SWAP,
+                '🆕' => TokenType::NEW,
+                '☯' => TokenType::BOOL,
+                '🔢' => TokenType::INT,
+                '🔤' => TokenType::STR,
+                '🔚' => TokenType::LEND,
+                '🔁' => TokenType::WHILE,
+                '📄' => TokenType::PRINT,
+                '📞' => TokenType::CALL,
+                '👍' => {
+                    tkn.value_int = 1;
+                    TokenType::VAL
+                    },
+                '👎' => {
+                    tkn.value_int = 0;
+                    TokenType::VAL
+                    },
                 _ => {
                     // Handle variable names
                     if self.state == TokenizerState::DEFINING || self.state == TokenizerState::DEFINED {
-                        tkn.kind = TokenType::ID;
                         let (end_pos, id) = self.create_id(pos);
                         pos = end_pos;
                         tkn.value_str = id;
                         self.state = TokenizerState::NONE;
+                        TokenType::ID
                     } else { // Handle value creation
-                        tkn.kind = TokenType::VAL;
-
                         // Make make digit (each keycap is 3 codepoints wide)
                         if pos + 3 < prog.len() && is_keycap(&prog[pos..pos+3]) {
                             while pos + 3 < prog.len() && is_keycap(&prog[pos..pos+3]) {
@@ -194,6 +188,7 @@ impl Tokenizer {
                             }
                             pos -= 1;
                         }
+                        TokenType::VAL
                     }
                 }
             };
