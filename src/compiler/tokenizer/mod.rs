@@ -144,6 +144,8 @@ impl Tokenizer {
                 '❓' => TokenType::IF,
                 '🌛' => TokenType::RPAREN,
                 '🌜' => TokenType::LPAREN,
+                '🌘' => TokenType::LBRACE,
+                '🌒' => TokenType::RBRACE,
                 '🎲' => TokenType::RAND,
                 '🚫' => TokenType::NOT,
                 '⬅'  => TokenType::EQ,
