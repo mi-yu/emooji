@@ -34,6 +34,7 @@ pub enum TokenType {
     SWAP,
     VAL,
     WHILE,
+    QUOTE,
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -41,6 +42,7 @@ pub enum VarType {
     BOOL,
     INT,
     STR,
+    FUN,
     NONE,
 }
 
@@ -163,6 +165,7 @@ impl Tokenizer {
                 '🔁' => TokenType::WHILE,
                 '📄' => TokenType::PRINT,
                 '📞' => TokenType::CALL,
+                '🤪' => TokenType::FUN,
                 '👍' => {
                     tkn.value_int = 1;
                     TokenType::VAL
@@ -188,16 +191,23 @@ impl Tokenizer {
                                 pos += 3;
                             }
                             pos -= 1;
-                        } else { // Handle make string
+                            TokenType::VAL
+                        } else if prog[pos] == '💬' { // Handle make string
                             // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos]);
-
+                            pos += 1;
+                            while pos < prog.len() && is_emoji(prog[pos]) && prog[pos] != '💬' {
+                                tkn.value_str.push(prog[pos]);
+                                pos += 1;
+                            }
+                            TokenType::VAL
+                        } else {
                             while pos < prog.len() && is_emoji(prog[pos]) {
                                 tkn.value_str.push(prog[pos]);
                                 pos += 1;
                             }
                             pos -= 1;
+                            TokenType::ID
                         }
-                        TokenType::VAL
                     }
                 }
             };

@@ -88,6 +88,7 @@ impl Compiler {
                     TokenType::BOOL => VarType::BOOL,
                     TokenType::INT => VarType::INT,
                     TokenType::STR => VarType::STR,
+                    TokenType::FUN => VarType::FUN,
                     _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
                         self.debug_str()),
                 };
@@ -95,8 +96,18 @@ impl Compiler {
                 self.consume();
                 match self.peek() {
                     TokenType::ID => {
+                        self.annotate_type(var_type, var_count);
                         // vars.push(self.current().value_str);
-                        content.push_str(&format!("\t\tvar{}: .quad 0\n", var_count));
+                        if var_type == VarType::STR {
+                            self.consume();
+                            self.consume();
+                            content.push_str(&format!("\t\tvar{}: .string \"{}\"\n", var_count, self.current().value_str));
+                        } else {
+                            content.push_str(&format!("\t\tvar{}: .quad 0\n", var_count));
+                            self.consume();
+                            self.consume();
+                        }
+                        // annotate values as well
                         self.annotate_type(var_type, var_count);
                         var_count += 1;
                     },
@@ -201,19 +212,38 @@ impl Compiler {
     }
 
     fn statement(&mut self) -> bool {
+        println!("{:?}", self.current());
         match self.peek() {
+            TokenType::ID => {
+                let var_id = self.current().var_num;
+                self.consume();
+
+                // TODO: handle function calls
+
+                if self.peek() != TokenType::EQ {
+                    panic!("needs EQ after ID");
+                }
+                self.consume();
+
+                self.expression();
+                // assign value to variable
+                self.write(&format!("\t\tmovq %rax, var{}\n", var_id));
+            },
             TokenType::PRINT => {
                 self.consume();
+
                 self.expression();
                 self.write("# printing:\n");
                 self.write("\t\tmovq %rax, %rsi\n");
                 self.write_print_int();
                 self.write("# finished printing\n");
             },
+            TokenType::END => {
+                return false;
+            }
             _ => {
                 self.consume();
                 // println!("LSKDFJSLKDFJ");
-                return false;
             }
         };
         return true;
@@ -270,16 +300,18 @@ impl Compiler {
         match self.peek() {
             TokenType::VAL => {
                 let curr = self.current();
-                if curr.value_str.len() == 0 {
-                    self.write(format!("\t\tmovq ${}, %rax\n", curr.value_int).as_ref());
+                // println!("{:?}", curr);
+                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
+                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
                 } else {
-                    println!("needs to be implemented");
+                    self.write(&format!("\t\tmovq var{}, %rax\n", curr.var_num));
                 }
 
                 self.consume();
             },
             _ => {
                 println!("needs to be implemented");
+                self.consume();
             }
         }
     }
