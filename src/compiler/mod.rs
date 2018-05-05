@@ -138,9 +138,17 @@ impl Compiler {
                         },
                         self.debug_str());
                 }
+
+                // enforce end punctuation
+                if self.peek() != TokenType::LEND {
+                    panic!("Missing line end punctuation: {}", 
+                        self.debug_str());
+                }
+                self.consume();
             }
             else if self.peek() == TokenType::IF {
                 self.consume();
+                
             }
             else if self.peek() == TokenType::ELSE {
                 self.consume();
@@ -168,6 +176,23 @@ impl Compiler {
     pub fn check_expr_syntax(&mut self) -> VarType {
         self.consume();
         VarType::BOOL
+    }
+
+    pub fn check_cond_syntax(&mut self) {
+        if self.peek() != TokenType::LPAREN {
+            panic!("Conditions must start with parenthesis: {}", 
+                self.debug_str());
+        }
+        self.consume();
+        let expr_type = self.check_expr_syntax();
+        if !(Token::can_convert_to(expr_type, VarType::BOOL) {
+            panic!("Condition must evaluate to boolean: {}",
+        }
+        if self.peek() != TokenType::RPAREN {
+            panic!("Conditions must end with parenthesis: {}", 
+                self.debug_str());
+        } 
+        self.consume();
     }
 
     pub fn gen_code(&mut self) {
