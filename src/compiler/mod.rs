@@ -88,7 +88,6 @@ impl Compiler {
                     TokenType::BOOL => VarType::BOOL,
                     TokenType::INT => VarType::INT,
                     TokenType::STR => VarType::STR,
-                    TokenType::FUN => VarType::FUN,
                     _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
                         self.debug_str()),
                 };
@@ -124,14 +123,14 @@ impl Compiler {
     }
 
     pub fn check_syntax(&mut self) {
-        self.check_syntex_seq()
+        self.check_syntax_seq();
         while self.peek() != TokenType::END {
-            check_statement_syntax();
+            self.check_statement_syntax();
         }
         self.reset();
     }
 
-    fn check_syntex_seq(&mut self) {
+    fn check_syntax_seq(&mut self) {
         while self.peek() != TokenType::RBRACE {
             self.check_statement_syntax();
         }
@@ -181,8 +180,8 @@ impl Compiler {
         else if self.peek() == TokenType::IF {
             self.consume();            
             let expr_type = self.check_expr_syntax();
-            if !(Token::can_convert_to(expr_type, VarType::BOOL) {
-                panic!("Condition must evaluate to boolean: {}",
+            if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
+                panic!("Condition must evaluate to boolean: {}")
             }
             self.check_statement_syntax();
             let mut ended = false;
@@ -194,8 +193,8 @@ impl Compiler {
                 if self.peek() == TokenType::IF {
                     self.consume();
                     let expr_type = self.check_expr_syntax();
-                    if !(Token::can_convert_to(expr_type, VarType::BOOL) {
-                        panic!("Condition must evaluate to boolean: {}",
+                    if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
+                        panic!("Condition must evaluate to boolean: {}")
                     }
                     self.check_statement_syntax();
                 }
@@ -260,11 +259,32 @@ impl Compiler {
     fn statement(&mut self) -> bool {
         println!("{:?}", self.current());
         match self.peek() {
+            TokenType::CALL => {
+                self.consume();
+                let var_num = self.current().var_num;
+                self.write(&format!("\t\tcall *var{}\n", var_num));
+                self.consume();
+            },
+            TokenType::FUN => {
+                let curr_pos = self.pos;
+                self.consume();
+                if self.peek() != TokenType::ID {
+                    panic!("function def must be followed by ID");
+                }
+                let var_num = self.current().var_num;
+                self.consume();
+
+                self.write(&format!("\t\tlea func_{}, %rax\n", curr_pos));
+                self.write(&format!("\t\tmovq %rax, var{}\n", var_num));
+                self.write(&format!("\t\tjmp finish_define_func_{}\n", curr_pos));
+                self.write(&format!("func_{}:\n", curr_pos));
+                self.statement();
+                self.write("\t\tret\n");
+                self.write(&format!("finish_define_func_{}:\n", curr_pos));
+            },
             TokenType::ID => {
                 let var_id = self.current().var_num;
                 self.consume();
-
-                // TODO: handle function calls
 
                 if self.peek() != TokenType::EQ {
                     panic!("needs EQ after ID");
@@ -347,12 +367,20 @@ impl Compiler {
             TokenType::VAL => {
                 let curr = self.current();
                 // println!("{:?}", curr);
-                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
-                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
-                } else {
-                    self.write(&format!("\t\tmovq var{}, %rax\n", curr.var_num));
+                self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
+                self.consume();
+            },
+            TokenType::LPAREN => {
+                self.consume();
+                self.expression();
+                if self.peek() != TokenType::RPAREN {
+                    panic!("mismatched parentheses");
                 }
-
+                self.consume();
+            },
+            TokenType::ID => {
+                let var_num = self.current().var_num;
+                self.write(&format!("\t\tmovq var{}, %rax\n", var_num));
                 self.consume();
             },
             _ => {
