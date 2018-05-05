@@ -47,7 +47,7 @@ fn main() {
 
     // start compilation
     compiler.gen_data();
-    // compiler.check_syntax();
+    compiler.check_syntax();
     compiler.gen_code();
 
     // compile binary

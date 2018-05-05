@@ -81,9 +81,16 @@ impl Token {
         self.value_str.clone()
     }
 
-    pub fn can_convert_to(&self, other_vt: VarType) -> bool {
-        false
-        // IMPLEMENT
+    pub fn can_convert_to(from_type: VarType, to_type: VarType) -> bool {
+        if to_type == VarType::NONE {
+            panic!("Internal error: cannot convert to NONE.");
+        }
+        match from_type {
+            VarType::BOOL => true,
+            VarType::INT => to_type != VarType::BOOL,
+            VarType::STR => to_type == VarType::STR,
+            _ => panic!("Internal error: cannot convert from NONE."),
+        }
     }
 }
 

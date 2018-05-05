@@ -114,45 +114,60 @@ impl Compiler {
 
     pub fn check_syntax(&mut self) {
         while self.peek() != TokenType::END {
-            if self.peek() == TokenType::NEW {
-                self.consume();
-                // remove duplicate code
-
-                self.consume();
+            if self.peek() == TokenType::ID {
+                // consume var name token
                 let var_type = self.current().var_type;
-                // if self.peek() != TokenType::ID{
-                //     panic!("Bad instantiation. No variable name provided: {}", 
-                //         self.debug_str());
-                // }
-
                 self.consume();
+
+                // consume EQ token
                 if self.peek() != TokenType::EQ {
                     panic!("Bad instantiation. Must assign value to new variable: {}", 
                         self.debug_str());
                 }
-
                 self.consume();
-                if (self.peek() == TokenType::VAL) || (self.peek() == TokenType::ID) {
-                    if !(self.current().can_convert_to(var_type)){
-                        panic!("Illegal assignment. Cannot convert to {}: {}",
-                            match var_type {
-                                VarType::BOOL => "bool",
-                                VarType::INT => "int",
-                                VarType::STR => "string",
-                                _ => ""
-                            },
-                            self.debug_str());
-                    }
-                }
-                else {
-                    panic!("Illegal assignment. Needs value or id: {}", 
+
+                // check expression validity and check if assignment types match
+                let expr_type = self.check_expr_syntax();
+                if !(Token::can_convert_to(expr_type, var_type)){
+                    panic!("Illegal assignment. Cannot convert to {}: {}",
+                        match var_type {
+                            VarType::BOOL => "bool",
+                            VarType::INT => "int",
+                            VarType::STR => "string",
+                            _ => ""
+                        },
                         self.debug_str());
                 }
             }
-            self.consume();
+            else if self.peek() == TokenType::IF {
+                self.consume();
+            }
+            else if self.peek() == TokenType::ELSE {
+                self.consume();
+            }
+            else if self.peek() == TokenType::WHILE {
+                self.consume();
+            }
+            else if self.peek() == TokenType::PRINT {
+                self.consume();
+            }
+            else if self.peek() == TokenType::RAND {
+                self.consume();
+            }
+            else if self.peek() == TokenType::SWAP {
+                self.consume();
+            }
+            else if self.peek() == TokenType::FUN {
+                self.consume();
+            }
         }
 
         self.reset();
+    }
+
+    pub fn check_expr_syntax(&mut self) -> VarType {
+        self.consume();
+        VarType::BOOL
     }
 
     pub fn gen_code(&mut self) {
