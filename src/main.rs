@@ -61,6 +61,8 @@ fn main() {
     		.spawn()
     		.expect("could not assemble .s file");
 
+    println!("Generated executable {}", &args[1]);
+
     // Command::new(format!("{}{}", "./", &args[1]))
     // 		.spawn()
     // 		.expect("could not run binary");
