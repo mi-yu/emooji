@@ -6,11 +6,13 @@ use std::fs::File;
 use self::tokenizer::TokenType;
 use self::tokenizer::VarType;
 use self::tokenizer::Token;
+use std::collections::HashSet;
 
 pub struct Compiler {
     tokens: Vec<Token>,
     file: File,
-    pos: usize
+    pos: usize,
+    id_set: HashSet<String>
 }
 
 impl Compiler {
@@ -21,12 +23,14 @@ impl Compiler {
         Compiler {
             tokens: tokens,
             file: file,
-            pos: 0
+            pos: 0,
+            id_set: HashSet::new()
         }
     }
 
     fn consume(&mut self) {
         self.pos += 1;
+        println!("{:?}", self.tokens[self.pos]);
     }
 
     fn peek(&self) -> TokenType {
@@ -79,46 +83,22 @@ impl Compiler {
                         \t\tFuncCall: .quad 0\n");
 
         // let mut vars: Vec<String> = Vec::new();
-        let mut var_count = 0;
 
         while self.peek() != TokenType::END {
-            if self.peek() == TokenType::NEW {
-                self.consume();
-                let var_type = match self.peek() {
-                    TokenType::BOOL => VarType::BOOL,
-                    TokenType::INT => VarType::INT,
-                    TokenType::STR => VarType::STR,
-                    _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
-                        self.debug_str()),
-                };
-
-                self.consume();
-                match self.peek() {
-                    TokenType::ID => {
-                        self.annotate_type(var_type, var_count);
-                        // vars.push(self.current().value_str);
-                        if var_type == VarType::STR {
-                            self.consume();
-                            self.consume();
-                            content.push_str(&format!("\t\tvar{}: .string \"{}\"\n", var_count, self.current().value_str));
-                        } else {
-                            content.push_str(&format!("\t\tvar{}: .quad 0\n", var_count));
-                            self.consume();
-                            self.consume();
-                        }
-                        // annotate values as well
-                        self.annotate_type(var_type, var_count);
-                        var_count += 1;
-                    },
-                    _ => panic!("Bad instantiation. No variable name provided: {}", 
-                        self.debug_str()),
+            if self.peek() == TokenType::ID {
+                let id = self.current().value_str;
+                if !self.id_set.contains(&id) {
+                    content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                    self.id_set.insert(id);
                 }
             }
+
             self.consume();
         }
 
         self.write(&content);
-
+        // free up the id_set
+        drop(&self.id_set);
         self.reset();
     }
 
@@ -257,12 +237,12 @@ impl Compiler {
     }
 
     fn statement(&mut self) -> bool {
-        println!("{:?}", self.current());
+        // println!("{:?}", self.current());
         match self.peek() {
             TokenType::CALL => {
                 self.consume();
-                let var_num = self.current().var_num;
-                self.write(&format!("\t\tcall *var{}\n", var_num));
+                let id = self.current().value_str;
+                self.write(&format!("\t\tcall *{}\n", id));
                 self.consume();
             },
             TokenType::FUN => {
@@ -271,29 +251,54 @@ impl Compiler {
                 if self.peek() != TokenType::ID {
                     panic!("function def must be followed by ID");
                 }
-                let var_num = self.current().var_num;
+                let id = self.current().value_str;
                 self.consume();
 
                 self.write(&format!("\t\tlea func_{}, %rax\n", curr_pos));
-                self.write(&format!("\t\tmovq %rax, var{}\n", var_num));
+                self.write(&format!("\t\tmovq %rax, {}\n", id));
                 self.write(&format!("\t\tjmp finish_define_func_{}\n", curr_pos));
                 self.write(&format!("func_{}:\n", curr_pos));
                 self.statement();
                 self.write("\t\tret\n");
                 self.write(&format!("finish_define_func_{}:\n", curr_pos));
             },
+            TokenType::LBRACE => {
+                self.consume();
+                self.statement();
+                if self.peek() != TokenType::RBRACE {
+                    panic!("mismatched braces");
+                }
+                self.consume();
+            },
+            TokenType::IF => {
+                self.consume();
+                self.expression();
+                self.write("\t\tcmp $0, %rax\n");
+                let curr_pos = self.pos;
+                self.write(&format!("\t\t je if_{}\n", curr_pos));
+                self.statement();
+                self.write(&format!("\t\t jmp done_if_{}\n", curr_pos));
+                self.write(&format!("if_{}:\n", curr_pos));
+
+                if self.peek() == TokenType::ELSE {
+                    self.consume();
+                    self.statement();
+                }
+
+                self.write(&format!("done_if_{}:\n", curr_pos));
+            },
             TokenType::ID => {
-                let var_id = self.current().var_num;
+                let id = self.current().value_str;
                 self.consume();
 
                 if self.peek() != TokenType::EQ {
-                    panic!("needs EQ after ID");
+                    panic!("needs EQ after ID, {:?}", self.current());
                 }
                 self.consume();
 
                 self.expression();
                 // assign value to variable
-                self.write(&format!("\t\tmovq %rax, var{}\n", var_id));
+                self.write(&format!("\t\tmovq %rax, {}\n", id));
             },
             TokenType::PRINT => {
                 self.consume();
@@ -379,8 +384,8 @@ impl Compiler {
                 self.consume();
             },
             TokenType::ID => {
-                let var_num = self.current().var_num;
-                self.write(&format!("\t\tmovq var{}, %rax\n", var_num));
+                let id = self.current().value_str;
+                self.write(&format!("\t\tmovq {}, %rax\n", id));
                 self.consume();
             },
             _ => {
