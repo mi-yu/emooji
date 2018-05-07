@@ -84,7 +84,7 @@ fn is_joiner(ch: char) -> bool {
     ch == '\u{200d}'
 }
 
-fn is_variant_selector(ch: char) -> bool {
+pub fn is_variant_selector(ch: char) -> bool {
     match ch {
         '\u{fe0e}' | '\u{fe0f}' => true,
         _ => false
@@ -110,5 +110,16 @@ pub fn get_keycap_val(ch: char) -> u64 {
         '\u{38}' => 8,
         '\u{39}' => 9,
         _ => panic!("Error: {:?} is not a valid digit", ch)
+    }
+}
+
+pub fn is_keyword(ch: char) -> bool {
+    match ch {
+        '🆕' | '☯' | '👍' | '👎' | '🔢' | 
+        '🤪' | '🌘' | '🌒' | '📄' | '➕' | 
+        '➖' | '✖' | '➗' | '🚫' | '⬅' | 
+        '↔' | '🔀' | '🎲' | '📞' | '❓' |
+        '🌜' | '🌛' | '❌' | '🔁' => true,
+        _ => false
     }
 }

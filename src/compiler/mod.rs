@@ -30,7 +30,7 @@ impl Compiler {
 
     fn consume(&mut self) {
         self.pos += 1;
-        println!("{:?}", self.tokens[self.pos]);
+        // println!("{:?}", self.tokens[self.pos]);
     }
 
     fn peek(&self) -> TokenType {
@@ -237,7 +237,7 @@ impl Compiler {
     }
 
     fn statement(&mut self) -> bool {
-        // println!("{:?}", self.current());
+        println!("{:?}", self.current());
         match self.peek() {
             TokenType::CALL => {
                 self.consume();
@@ -264,9 +264,9 @@ impl Compiler {
             },
             TokenType::LBRACE => {
                 self.consume();
-                self.statement();
+                self.program();
                 if self.peek() != TokenType::RBRACE {
-                    panic!("mismatched braces");
+                    panic!("mismatched braces at {:?}", self.current());
                 }
                 self.consume();
             },
@@ -287,6 +287,17 @@ impl Compiler {
 
                 self.write(&format!("done_if_{}:\n", curr_pos));
             },
+            TokenType::WHILE => {
+                self.consume();
+                let curr_pos = self.pos;
+                self.write(&format!("while_{}:\n", curr_pos));
+                self.expression();
+                self.write("\t\tcmp $0, %rax\n");
+                self.write(&format!("\t\tje while_done_{}\n", curr_pos));
+                self.statement();
+                self.write(&format!("\t\tjmp while_{}\n", curr_pos));
+                self.write(&format!("while_done_{}:\n", curr_pos));
+            }
             TokenType::ID => {
                 let id = self.current().value_str;
                 self.consume();
@@ -309,9 +320,9 @@ impl Compiler {
                 self.write_print_int();
                 self.write("# finished printing\n");
             },
-            TokenType::END => {
+            TokenType::END | TokenType::RBRACE => {
                 return false;
-            }
+            },
             _ => {
                 self.consume();
                 // println!("LSKDFJSLKDFJ");

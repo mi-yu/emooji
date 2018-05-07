@@ -3,6 +3,8 @@ use std::char;
 use self::tokenizer_util::is_emoji;
 use self::tokenizer_util::is_keycap;
 use self::tokenizer_util::get_keycap_val;
+use self::tokenizer_util::is_keyword;
+use self::tokenizer_util::is_variant_selector;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum TokenType {
@@ -201,7 +203,7 @@ impl Tokenizer {
                             }
                             TokenType::VAL
                         } else {
-                            while pos < prog.len() && is_emoji(prog[pos]) {
+                            while pos < prog.len() && is_emoji(prog[pos]) && !is_keyword(prog[pos]) {
                                 tkn.value_str.push(prog[pos]);
                                 pos += 1;
                             }
@@ -244,7 +246,7 @@ impl Tokenizer {
     fn fast_forward_whitespace(&mut self, start: usize) -> usize {
         let mut i = start;
         let prog = &self.program;
-        while i < prog.len() && prog[i].is_whitespace() {
+        while i < prog.len() && (prog[i].is_whitespace() || is_variant_selector(prog[i])) {
             i += 1;
         }
 
