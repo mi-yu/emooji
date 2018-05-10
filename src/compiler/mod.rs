@@ -6,7 +6,6 @@ use std::fs::File;
 use self::tokenizer::TokenType;
 use self::tokenizer::VarType;
 use self::tokenizer::Token;
-use std::collections::HashSet;
 use std::collections::HashMap;
 
 pub struct Compiler {
@@ -54,8 +53,9 @@ impl Compiler {
         self.tokens[self.pos].var_type = var_type;
     }
 
-    fn change_type_to_funid(&mut self) {
+    fn annotate_func(&mut self, args: &Vec<VarType>) {
         self.tokens[self.pos].kind = TokenType::FUNID;
+        self.tokens[self.pos].copy_arg_types(&args);
     }
 
     fn reset(&mut self) {
@@ -76,7 +76,7 @@ impl Compiler {
                     \t\tpop %rax\n");
     }
 
-    pub fn gen_data(&mut self) {
+    pub fn gen_data(&mut self) -> (HashMap<String, VarType>, HashMap<String, Vec<VarType>>) {
         let mut content = String::from(".data\n\
                         \t\targc_: .quad 0\n\
                         \t\tFormat_ints: .byte '%', 'l', 'u', 10, 0\n\
@@ -85,46 +85,83 @@ impl Compiler {
                         \t\tFuncCall: .quad 0\n");
 
         let mut vars: HashMap<String, VarType> = HashMap::new();
-        let mut funcs: HashSet<String> = HashSet::new();
+        let mut funcs: HashMap<String, Vec<VarType>> = HashMap::new();
 
         while self.peek() != TokenType::END {
-            if self.peek() == TokenType::NEW {
-                self.consume();
-                let var_type = match self.peek() {
-                    TokenType::BOOL => VarType::BOOL,
-                    TokenType::INT => VarType::INT,
-                    TokenType::STR => VarType::STR,
-                    _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
-                        self.debug_str()),
-                };
+            match self.peek(){
+                TokenType::NEW => {
+                    self.consume();
+                    let var_type = match self.peek() {
+                        TokenType::BOOL => VarType::BOOL,
+                        TokenType::INT => VarType::INT,
+                        TokenType::STR => VarType::STR,
+                        _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
+                            self.debug_str()),
+                    };
 
-                self.consume();
-                match self.peek() {
-                    TokenType::ID => {
-                        let id = self.current().value_str;
-                        content.push_str(&format!("\t\t{}: .quad 0\n", id));
-                        self.annotate_type(var_type);
-                        vars.insert(id, var_type);
-                    },
-                    _ => panic!("Bad instantiation. No variable name provided: {}", 
-                        self.debug_str()),
+                    self.consume();
+                    match self.peek() {
+                        TokenType::ID => {
+                            let id = self.current().value_str;
+                            content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                            vars.insert(id, var_type);
+                        },
+                        _ => panic!("Bad instantiation. No variable name provided: {}", 
+                            self.debug_str()),
+                    }
+                },
+                TokenType::FUN => {
+                    self.consume();
+                    match self.peek() {
+                        TokenType::ID => {
+                            let id = self.current().value_str;
+                            content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                            self.consume();
+                            if self.peek() != TokenType::LPAREN {
+                                panic!("Function declaration missing parentheses: {}", self.debug_str());
+                            }
+                            self.consume();
+                            let mut arg_count = 0;
+                            let mut args: Vec<VarType> = Vec::new();
+                            while self.peek() != TokenType::RPAREN {
+                                // argument type
+                                let var_type = match self.peek() {
+                                    TokenType::BOOL => VarType::BOOL,
+                                    TokenType::INT => VarType::INT,
+                                    TokenType::STR => VarType::STR,
+                                    _ => panic!("Must declare type of argument: {}", 
+                                        self.debug_str()),
+                                };
+                                self.consume();
+                                args.push(var_type);
+
+                                // argument name
+                                if self.peek() != TokenType::ID {
+                                    panic!("Arguments must have names: {}", self.debug_str());
+                                }
+                                self.consume();
+
+                                // check argument count
+                                arg_count += 1;
+                                if arg_count > 6 {
+                                    panic!("Limited to six arguments: {}", self.debug_str());
+                                }
+
+                                // consume delimiter
+                                if self.peek() == TokenType::DELIM {
+                                    self.consume();
+                                }
+                            }
+
+                            funcs.insert(id, args);
+                        },
+                        _ => panic!("Bad function declaration. No function name provided: {}", 
+                            self.debug_str()),
+                    }
+                },
+                _ => {
+                    self.consume();
                 }
-            }
-            else if self.peek() == TokenType::FUN {
-                self.consume();
-                match self.peek() {
-                    TokenType::ID => {
-                        let id = self.current().value_str;
-                        content.push_str(&format!("\t\t{}: .quad 0\n", id));
-                        self.change_type_to_funid();
-                        funcs.insert(id);
-                    },
-                    _ => panic!("Bad function declaration. No function name provided: {}", 
-                        self.debug_str()),
-                }
-            }
-            else {
-                self.consume();
             }
         }
 
@@ -132,25 +169,51 @@ impl Compiler {
 
         self.reset();
 
+        (vars, funcs)
+    }
+
+    pub fn gen_annotations(&mut self, vars: HashMap<String, VarType>, funcs: HashMap<String, Vec<VarType>>) {
         // annotate all id types
+        let mut declaring_fun = false;
         while self.peek() != TokenType::END {
-            if self.peek() == TokenType::ID {
-                let id = self.current().value_str;
-                match vars.get(&id) {
-                    Some(var_type) => self.annotate_type(*var_type),
-                    None => {
-                        if funcs.contains(&id) {
-                            self.change_type_to_funid();
-                        }
-                        else {
-                            panic!("Variable or function never declared: {}", self.debug_str());
+            match self.peek() {
+                TokenType::ID => {
+                    let id = self.current().value_str;
+                    if !declaring_fun {
+                        match vars.get(&id) {
+                            Some(var_type) => self.annotate_type(*var_type),
+                            None => {
+                                match funcs.get(&id) {
+                                    Some(args) => self.annotate_func(args),
+                                    None => panic!("Variable or function never declared: {}", self.debug_str()),
+                                }
+                            }
                         }
                     }
+                    else {
+                        match vars.get(&id) {
+                            Some(_) => panic!("Argument cannot share name with global variable: {}",
+                                                     self.debug_str()),
+                            None => {},
+                        }
+                    }
+                    self.consume();
+                },
+                TokenType::FUN => {
+                    declaring_fun = true;
+                    self.consume();
+                },
+                TokenType::RPAREN => {
+                    if declaring_fun {
+                        declaring_fun = false;
+                    }
+                    self.consume();
+                }
+                _ => {
+                    self.consume();
                 }
             }
-            else {
-                self.consume();
-            }
+            
         }
 
         self.reset();
@@ -258,38 +321,56 @@ impl Compiler {
                 }
                 self.consume();
             },
-            // TokenType::SWAP => {
-            //     self.consume();
-
-            //     // check if args enclosed by parens
-            //     let parens;
-            //     if self.peek() != TokenType::LPAREN {
-            //         parens = true;
-            //         self.consume();
-            //     }
-            //     else {
-            //         parens = false;
-            //     }
-            //     self.check_expr_syntax();
-            //     self.check_expr_syntax();
-                    // THIS IS NOT DONE
-            //     if parens {
-            //         if self.peek() != TokenType::RPAREN {
-            //             panic!("Missing closing parenthesis: {}", self.debug_str());
-            //         }
-            //         self.consume();
-            //     }
-                
-            //     // enforce end punctuation
-            //     if self.peek() != TokenType::LEND {
-            //         panic!("Missing line end punctuation: {}", 
-            //             self.debug_str());
-            //     }
-            //     self.consume();
-            // },
             TokenType::FUN => {
                 self.consume();
+                while self.peek() != TokenType::RPAREN {
+                    self.consume();
+                }
+                self.consume();
 
+                self.check_statement_syntax();
+            },
+            TokenType::CALL => {
+                self.consume();
+
+                // FUNID token
+                if self.peek() != TokenType::FUNID {
+                    panic!("Cannot call undeclared function: {}", self.debug_str());
+                }
+                let args = self.current().arg_types;
+                self.consume();
+
+                // LPAREN token
+                if self.peek() != TokenType::LPAREN {
+                    panic!("Function call requires parentheses: {}", self.debug_str());
+                }
+                self.consume();
+
+                // check arg types
+                for arg_type in &args {
+                    let vt = self.check_expr_syntax();
+                    if !(Token::can_convert_to(vt, *arg_type)) {
+                        panic!("Mismatched types: expected {:?}, found {:?}: {}", arg_type, vt,
+                            self.debug_str());
+                    }
+                    // consume delimiter
+                    if self.peek() == TokenType::DELIM {
+                        self.consume();
+                    }
+                }
+
+                // RPAREN token
+                if self.peek() != TokenType::RPAREN {
+                    panic!("Missing closing parenthesis: {}", self.debug_str());
+                }
+                self.consume();
+
+                // enforce end punctuation
+                if self.peek() != TokenType::LEND {
+                    panic!("Missing line end punctuation: {}", 
+                        self.debug_str());
+                }
+                self.consume();
             }
             _ => {
                 panic!("Unexpected token: {}", self.debug_str());
@@ -389,6 +470,30 @@ impl Compiler {
                 vt1 = self.current().var_type;
                 self.consume();
             },
+            TokenType::RAND => {
+                self.consume();
+
+                // LPAREN token
+                if self.peek() != TokenType::LPAREN {
+                    panic!("Function call requires parentheses: {}", self.debug_str());
+                }
+                self.consume();
+
+                // check arg
+                let arg_type = self.check_expr_syntax();
+                if !(Token::can_convert_to(arg_type, VarType::INT)) {
+                    panic!("Mismatched types: expected INT, found {:?}: {}", arg_type,
+                        self.debug_str());
+                }
+
+                // RPAREN token
+                if self.peek() != TokenType::RPAREN {
+                    panic!("Missing closing parenthesis: {}", self.debug_str());
+                }
+                self.consume();
+
+                vt1 = VarType::INT;
+            },
             _ => {
                 panic!("Value not found: {}", self.debug_str());
             }
@@ -438,9 +543,8 @@ impl Compiler {
             TokenType::FUN => {
                 let curr_pos = self.pos;
                 self.consume();
-                // if self.peek() != TokenType::ID {
-                //     panic!("function def must be followed by ID");
-                // }
+                
+                // ID token
                 let id = self.current().value_str;
                 self.consume();
 
@@ -455,9 +559,8 @@ impl Compiler {
             TokenType::LBRACE => {
                 self.consume();
                 self.program();
-                // if self.peek() != TokenType::RBRACE {
-                //     panic!("mismatched braces at {:?}", self.current());
-                // }
+                    
+                // RBRACE token
                 self.consume();
             },
             TokenType::IF => {
@@ -492,9 +595,7 @@ impl Compiler {
                 let id = self.current().value_str;
                 self.consume();
 
-                // if self.peek() != TokenType::EQ {
-                //     panic!("needs EQ after ID, {:?}", self.current());
-                // }
+                // EQ token
                 self.consume();
 
                 self.expression();

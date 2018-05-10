@@ -10,6 +10,7 @@ use self::tokenizer_util::is_variant_selector;
 pub enum TokenType {
     BOOL,
     CALL,
+    DELIM,
     DIV,
     ELSE,
     END,
@@ -44,7 +45,6 @@ pub enum VarType {
     BOOL,
     INT,
     STR,
-    FUN,
     NONE,
 }
 
@@ -53,8 +53,8 @@ pub struct Token {
     pub kind: TokenType,
     pub value_int: u64,
     pub value_str: String,
-    pub var_type: VarType
-
+    pub var_type: VarType,
+    pub arg_types: Vec<VarType>
 }
 
 impl Clone for Token {
@@ -63,7 +63,8 @@ impl Clone for Token {
             kind: self.kind,
             value_int: self.value_int,
             value_str: self.value_str.clone(),
-            var_type: self.var_type
+            var_type: self.var_type,
+            arg_types: self.arg_types.clone()
         }
     }
 }
@@ -74,7 +75,8 @@ impl Token {
             kind: TokenType::NONE,
             value_int: 0,
             value_str: String::from(""),
-            var_type: VarType::NONE
+            var_type: VarType::NONE,
+            arg_types: Vec::new()
         }
     }
 
@@ -91,6 +93,12 @@ impl Token {
             VarType::INT => to_type != VarType::BOOL,
             VarType::STR => to_type == VarType::STR,
             _ => panic!("Internal error: cannot convert from NONE."),
+        }
+    }
+
+    pub fn copy_arg_types(&mut self, args: &Vec<VarType>) {
+        for vt in args {
+            self.arg_types.push(*vt);
         }
     }
 }
@@ -160,6 +168,7 @@ impl Tokenizer {
                 '☯' => TokenType::BOOL,
                 '🔢' => TokenType::INT,
                 '🔤' => TokenType::STR,
+                '◾' => TokenType::DELIM,
                 '🔚' => TokenType::LEND,
                 '🔁' => TokenType::WHILE,
                 '📄' => TokenType::PRINT,

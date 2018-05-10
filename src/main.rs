@@ -46,8 +46,9 @@ fn main() {
     let mut compiler = Compiler::new(program_contents, file);
 
     // start compilation
-    compiler.gen_data();
-    // compiler.check_syntax();
+    let (vars, funcs) = compiler.gen_data();
+    compiler.gen_annotations(vars, funcs);
+    compiler.check_syntax();
     compiler.gen_code();
 
     // compile binary
