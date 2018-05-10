@@ -7,12 +7,12 @@ use self::tokenizer::TokenType;
 use self::tokenizer::VarType;
 use self::tokenizer::Token;
 use std::collections::HashSet;
+use std::collections::HashMap;
 
 pub struct Compiler {
     tokens: Vec<Token>,
     file: File,
-    pos: usize,
-    id_set: HashSet<String>
+    pos: usize
 }
 
 impl Compiler {
@@ -23,8 +23,7 @@ impl Compiler {
         Compiler {
             tokens: tokens,
             file: file,
-            pos: 0,
-            id_set: HashSet::new()
+            pos: 0
         }
     }
 
@@ -51,9 +50,12 @@ impl Compiler {
         content
     }
 
-    fn annotate_type(&mut self, var_type: VarType, var_count: i32) {
+    fn annotate_type(&mut self, var_type: VarType) {
         self.tokens[self.pos].var_type = var_type;
-        self.tokens[self.pos].var_num = var_count;
+    }
+
+    fn change_type_to_funid(&mut self) {
+        self.tokens[self.pos].kind = TokenType::FUNID;
     }
 
     fn reset(&mut self) {
@@ -82,23 +84,75 @@ impl Compiler {
                         \t\tFuncTable: .quad 0\n\
                         \t\tFuncCall: .quad 0\n");
 
-        // let mut vars: Vec<String> = Vec::new();
+        let mut vars: HashMap<String, VarType> = HashMap::new();
+        let mut funcs: HashSet<String> = HashSet::new();
 
         while self.peek() != TokenType::END {
-            if self.peek() == TokenType::ID {
-                let id = self.current().value_str;
-                if !self.id_set.contains(&id) {
-                    content.push_str(&format!("\t\t{}: .quad 0\n", id));
-                    self.id_set.insert(id);
+            if self.peek() == TokenType::NEW {
+                self.consume();
+                let var_type = match self.peek() {
+                    TokenType::BOOL => VarType::BOOL,
+                    TokenType::INT => VarType::INT,
+                    TokenType::STR => VarType::STR,
+                    _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
+                        self.debug_str()),
+                };
+
+                self.consume();
+                match self.peek() {
+                    TokenType::ID => {
+                        let id = self.current().value_str;
+                        content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                        self.annotate_type(var_type);
+                        vars.insert(id, var_type);
+                    },
+                    _ => panic!("Bad instantiation. No variable name provided: {}", 
+                        self.debug_str()),
                 }
             }
-
-            self.consume();
+            else if self.peek() == TokenType::FUN {
+                self.consume();
+                match self.peek() {
+                    TokenType::ID => {
+                        let id = self.current().value_str;
+                        content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                        self.change_type_to_funid();
+                        funcs.insert(id);
+                    },
+                    _ => panic!("Bad function declaration. No function name provided: {}", 
+                        self.debug_str()),
+                }
+            }
+            else {
+                self.consume();
+            }
         }
 
         self.write(&content);
-        // free up the id_set
-        drop(&self.id_set);
+
+        self.reset();
+
+        // annotate all id types
+        while self.peek() != TokenType::END {
+            if self.peek() == TokenType::ID {
+                let id = self.current().value_str;
+                match vars.get(&id) {
+                    Some(var_type) => self.annotate_type(*var_type),
+                    None => {
+                        if funcs.contains(&id) {
+                            self.change_type_to_funid();
+                        }
+                        else {
+                            panic!("Variable or function never declared: {}", self.debug_str());
+                        }
+                    }
+                }
+            }
+            else {
+                self.consume();
+            }
+        }
+
         self.reset();
     }
 
@@ -117,93 +171,229 @@ impl Compiler {
     }
 
     fn check_statement_syntax(&mut self) {
-        if self.peek() == TokenType::LBRACE {
-            self.consume();
-            self.check_syntax_seq();
-            if self.peek() != TokenType::RBRACE {
-                panic!("Missing a closing brace: {}", self.debug_str());
-            }
-            self.consume();
-        }
-        else if self.peek() == TokenType::ID {
-            // consume var name token
-            let var_type = self.current().var_type;
-            self.consume();
-
-            // consume EQ token
-            if self.peek() != TokenType::EQ {
-                panic!("Bad instantiation. Must assign value to new variable: {}", 
-                    self.debug_str());
-            }
-            self.consume();
-
-            // check expression validity and check if assignment types match
-            let expr_type = self.check_expr_syntax();
-            if !(Token::can_convert_to(expr_type, var_type)){
-                panic!("Illegal assignment. Cannot convert to {}: {}",
-                    match var_type {
-                        VarType::BOOL => "bool",
-                        VarType::INT => "int",
-                        VarType::STR => "string",
-                        _ => ""
-                    },
-                    self.debug_str());
-            }
-
-            // enforce end punctuation
-            if self.peek() != TokenType::LEND {
-                panic!("Missing line end punctuation: {}", 
-                    self.debug_str());
-            }
-            self.consume();
-        }
-        else if self.peek() == TokenType::IF {
-            self.consume();            
-            let expr_type = self.check_expr_syntax();
-            if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
-                panic!("Condition must evaluate to boolean: {}")
-            }
-            self.check_statement_syntax();
-            let mut ended = false;
-            while self.peek() == TokenType::ELSE {
+        match self.peek() {
+            TokenType::LBRACE => {
                 self.consume();
-                if ended {
-                    panic!("Misplaced 'else': {}", self.debug_str());
+                self.check_syntax_seq();
+                if self.peek() != TokenType::RBRACE {
+                    panic!("Missing a closing brace: {}", self.debug_str());
                 }
-                if self.peek() == TokenType::IF {
+                self.consume();
+            },
+            TokenType::ID => {
+                // consume var name token
+                let var_type = self.current().var_type;
+                self.consume();
+
+                // consume EQ token
+                if self.peek() != TokenType::EQ {
+                    panic!("Bad instantiation. Must assign value to new variable: {}", 
+                        self.debug_str());
+                }
+                self.consume();
+
+                // check expression validity and check if assignment types match
+                let expr_type = self.check_expr_syntax();
+                if !(Token::can_convert_to(expr_type, var_type)){
+                    panic!("Illegal assignment. Cannot convert to {}: {}",
+                        match var_type {
+                            VarType::BOOL => "bool",
+                            VarType::INT => "int",
+                            VarType::STR => "string",
+                            _ => ""
+                        },
+                        self.debug_str());
+                }
+
+                // enforce end punctuation
+                if self.peek() != TokenType::LEND {
+                    panic!("Missing line end punctuation: {}", 
+                        self.debug_str());
+                }
+                self.consume();
+            },
+            TokenType::IF => {
+                self.consume();            
+                let expr_type = self.check_expr_syntax();
+                if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
+                    panic!("Condition must evaluate to boolean: {}")
+                }
+                self.check_statement_syntax();
+                let mut ended = false;
+                while self.peek() == TokenType::ELSE {
                     self.consume();
-                    let expr_type = self.check_expr_syntax();
-                    if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
-                        panic!("Condition must evaluate to boolean: {}")
+                    if ended {
+                        panic!("Misplaced 'else': {}", self.debug_str());
                     }
-                    self.check_statement_syntax();
+                    if self.peek() == TokenType::IF {
+                        self.consume();
+                        let expr_type = self.check_expr_syntax();
+                        if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
+                            panic!("Condition must evaluate to boolean: {}")
+                        }
+                        self.check_statement_syntax();
+                    }
+                    else {
+                        ended = true;
+                        self.check_statement_syntax();
+                    }
                 }
-                else {
-                    ended = true;
-                    self.check_statement_syntax();
+            },
+            TokenType::WHILE => {
+                self.consume();
+                let expr_type = self.check_expr_syntax();
+                if !(Token::can_convert_to(expr_type, VarType::BOOL)) {
+                    panic!("Condition must evaluate to boolean: {}")
                 }
+                self.check_statement_syntax();
+            },
+            TokenType::PRINT => {
+                self.consume();
+                self.check_expr_syntax();
+
+                // enforce end punctuation
+                if self.peek() != TokenType::LEND {
+                    panic!("Missing line end punctuation: {}", 
+                        self.debug_str());
+                }
+                self.consume();
+            },
+            // TokenType::SWAP => {
+            //     self.consume();
+
+            //     // check if args enclosed by parens
+            //     let parens;
+            //     if self.peek() != TokenType::LPAREN {
+            //         parens = true;
+            //         self.consume();
+            //     }
+            //     else {
+            //         parens = false;
+            //     }
+            //     self.check_expr_syntax();
+            //     self.check_expr_syntax();
+                    // THIS IS NOT DONE
+            //     if parens {
+            //         if self.peek() != TokenType::RPAREN {
+            //             panic!("Missing closing parenthesis: {}", self.debug_str());
+            //         }
+            //         self.consume();
+            //     }
+                
+            //     // enforce end punctuation
+            //     if self.peek() != TokenType::LEND {
+            //         panic!("Missing line end punctuation: {}", 
+            //             self.debug_str());
+            //     }
+            //     self.consume();
+            // },
+            TokenType::FUN => {
+                self.consume();
+
             }
-        }
-        else if self.peek() == TokenType::WHILE {
-            self.consume();
-        }
-        else if self.peek() == TokenType::PRINT {
-            self.consume();
-        }
-        else if self.peek() == TokenType::RAND {
-            self.consume();
-        }
-        else if self.peek() == TokenType::SWAP {
-            self.consume();
-        }
-        else if self.peek() == TokenType::FUN {
-            self.consume();
+            _ => {
+                panic!("Unexpected token: {}", self.debug_str());
+            }
         }
     }
 
     fn check_expr_syntax(&mut self) -> VarType {
-        self.consume();
-        VarType::BOOL
+        let mut vt1 = self.check_e3_syntax();
+        while self.peek() == TokenType::EQEQ {
+            self.consume();
+            let vt2 = self.check_e3_syntax();
+            if !(vt1 == vt2){
+                panic!("Cannot check equality of mismatched types: {}", self.debug_str());
+            }
+            vt1 = VarType::BOOL;
+        }
+        vt1
+    }
+
+    fn check_e3_syntax(&mut self) -> VarType {
+        let mut vt1 = self.check_e2_syntax();
+        while self.peek() == TokenType::PLUS || self.peek() == TokenType::MINUS {
+            let op_type = self.peek();
+            self.consume();
+            let vt2 = self.check_e2_syntax();
+
+            match op_type {
+                TokenType::PLUS => {
+                    if (vt1==VarType::STR) || (vt2==VarType::STR) {
+                        vt1 = VarType::STR;
+                    }
+                    else if (vt1==VarType::INT) || (vt2==VarType::INT) {
+                        vt1 = VarType::INT;
+                    }
+                },
+                TokenType::MINUS => {
+                    if (vt1==VarType::STR) || (vt2==VarType::STR) {
+                        panic!("Subtraction not defined for strings: {}", self.debug_str());
+                    }
+                    else {
+                        vt1 = VarType::INT;
+                    }
+                },
+                _ => panic!("Internal error: {}", self.debug_str()),
+            };
+        }
+        vt1
+    }
+
+    fn check_e2_syntax(&mut self) -> VarType {
+        let mut vt1 = self.check_e1_syntax();
+        while (self.peek() == TokenType::MUL) || (self.peek() == TokenType::DIV) {
+            let op_type = self.peek();
+            self.consume();
+            let vt2 = self.check_e1_syntax();
+
+            match op_type {
+                TokenType::MUL => {
+                    if (vt1==VarType::STR) || (vt2==VarType::STR) {
+                        panic!("Multiplication not defined for strings: {}", self.debug_str());
+                    }
+                    else if (vt1==VarType::INT) || (vt2==VarType::INT) {
+                        vt1 = VarType::INT;
+                    }
+                },
+                TokenType::DIV => {
+                    if (vt1==VarType::STR) || (vt2==VarType::STR) {
+                        panic!("Division not defined for strings: {}", self.debug_str());
+                    }
+                    else {
+                        vt1 = VarType::INT;
+                    }
+                },
+                _ => panic!("Internal error: {}", self.debug_str()),
+            }
+        }
+        vt1
+    }
+
+    fn check_e1_syntax(&mut self) -> VarType {
+        let vt1;
+        match self.peek() {
+            TokenType::VAL => {
+                vt1 = self.current().var_type;
+                self.consume();
+            },
+            TokenType::LPAREN => {
+                self.consume();
+                vt1 = self.check_expr_syntax();
+                if self.peek() != TokenType::RPAREN {
+                    panic!("Missing closing parenthesis: {}", self.debug_str());
+                }
+                self.consume();
+            },
+            TokenType::ID => {
+                vt1 = self.current().var_type;
+                self.consume();
+            },
+            _ => {
+                panic!("Value not found: {}", self.debug_str());
+            }
+        }
+        vt1
     }
 
     pub fn gen_code(&mut self) {
@@ -248,9 +438,9 @@ impl Compiler {
             TokenType::FUN => {
                 let curr_pos = self.pos;
                 self.consume();
-                if self.peek() != TokenType::ID {
-                    panic!("function def must be followed by ID");
-                }
+                // if self.peek() != TokenType::ID {
+                //     panic!("function def must be followed by ID");
+                // }
                 let id = self.current().value_str;
                 self.consume();
 
@@ -265,9 +455,9 @@ impl Compiler {
             TokenType::LBRACE => {
                 self.consume();
                 self.program();
-                if self.peek() != TokenType::RBRACE {
-                    panic!("mismatched braces at {:?}", self.current());
-                }
+                // if self.peek() != TokenType::RBRACE {
+                //     panic!("mismatched braces at {:?}", self.current());
+                // }
                 self.consume();
             },
             TokenType::IF => {
@@ -302,9 +492,9 @@ impl Compiler {
                 let id = self.current().value_str;
                 self.consume();
 
-                if self.peek() != TokenType::EQ {
-                    panic!("needs EQ after ID, {:?}", self.current());
-                }
+                // if self.peek() != TokenType::EQ {
+                //     panic!("needs EQ after ID, {:?}", self.current());
+                // }
                 self.consume();
 
                 self.expression();
@@ -389,9 +579,6 @@ impl Compiler {
             TokenType::LPAREN => {
                 self.consume();
                 self.expression();
-                if self.peek() != TokenType::RPAREN {
-                    panic!("mismatched parentheses");
-                }
                 self.consume();
             },
             TokenType::ID => {

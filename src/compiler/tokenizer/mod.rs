@@ -16,6 +16,7 @@ pub enum TokenType {
     EQ,
     EQEQ,
     FUN,
+    FUNID,
     ID,
     IF,
     INT,
@@ -33,7 +34,6 @@ pub enum TokenType {
     RBRACE,
     RPAREN,
     STR,
-    SWAP,
     VAL,
     WHILE,
     QUOTE,
@@ -53,8 +53,7 @@ pub struct Token {
     pub kind: TokenType,
     pub value_int: u64,
     pub value_str: String,
-    pub var_type: VarType,
-    pub var_num: i32
+    pub var_type: VarType
 
 }
 
@@ -64,8 +63,7 @@ impl Clone for Token {
             kind: self.kind,
             value_int: self.value_int,
             value_str: self.value_str.clone(),
-            var_type: self.var_type,
-            var_num: self.var_num
+            var_type: self.var_type
         }
     }
 }
@@ -76,8 +74,7 @@ impl Token {
             kind: TokenType::NONE,
             value_int: 0,
             value_str: String::from(""),
-            var_type: VarType::NONE,
-            var_num: 0
+            var_type: VarType::NONE
         }
     }
 
@@ -158,7 +155,7 @@ impl Tokenizer {
                 '➗' => TokenType::DIV,
                 '➕' => TokenType::PLUS,
                 '➖' => TokenType::MINUS,
-                '🔀' => TokenType::SWAP,
+                // '🔀' => TokenType::SWAP,
                 '🆕' => TokenType::NEW,
                 '☯' => TokenType::BOOL,
                 '🔢' => TokenType::INT,
