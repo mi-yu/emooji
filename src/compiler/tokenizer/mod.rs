@@ -176,10 +176,12 @@ impl Tokenizer {
                 '🤪' => TokenType::FUN,
                 '👍' => {
                     tkn.value_int = 1;
+                    tkn.var_type = VarType::BOOL;
                     TokenType::VAL
                     },
                 '👎' => {
                     tkn.value_int = 0;
+                    tkn.var_type = VarType::BOOL;
                     TokenType::VAL
                     },
                 _ => {
@@ -199,6 +201,7 @@ impl Tokenizer {
                                 pos += 3;
                             }
                             pos -= 1;
+                            tkn.var_type = VarType::INT;
                             TokenType::VAL
                         } else if prog[pos] == '💬' { // Handle make string
                             // println!("{:?}, state: {:?}, pos: {}, actual char: {:?}", tkn, self.state, self.pos, self.program[self.pos]);
@@ -207,6 +210,7 @@ impl Tokenizer {
                                 tkn.value_str.push(prog[pos]);
                                 pos += 1;
                             }
+                            tkn.var_type = VarType::STR;
                             TokenType::VAL
                         } else {
                             while pos < prog.len() && is_emoji(prog[pos]) && !is_keyword(prog[pos]) {

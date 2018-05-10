@@ -91,6 +91,8 @@ impl Compiler {
             match self.peek(){
                 TokenType::NEW => {
                     self.consume();
+
+                    // type token
                     let var_type = match self.peek() {
                         TokenType::BOOL => VarType::BOOL,
                         TokenType::INT => VarType::INT,
@@ -98,8 +100,9 @@ impl Compiler {
                         _ => panic!("Bad instantiation. Found NEW keyword without type: {}", 
                             self.debug_str()),
                     };
-
                     self.consume();
+
+                    // id token
                     match self.peek() {
                         TokenType::ID => {
                             let id = self.current().value_str;
@@ -220,7 +223,7 @@ impl Compiler {
     }
 
     pub fn check_syntax(&mut self) {
-        self.check_syntax_seq();
+        // self.check_syntax_seq();
         while self.peek() != TokenType::END {
             self.check_statement_syntax();
         }
@@ -240,6 +243,19 @@ impl Compiler {
                 self.check_syntax_seq();
                 if self.peek() != TokenType::RBRACE {
                     panic!("Missing a closing brace: {}", self.debug_str());
+                }
+                self.consume();
+            },
+            TokenType::NEW => {
+                self.consume();
+                // type token
+                self.consume();
+                // id token
+                self.consume();
+                // enforce end punctuation
+                if self.peek() != TokenType::LEND {
+                    panic!("Missing line end punctuation: {}", 
+                        self.debug_str());
                 }
                 self.consume();
             },
@@ -371,9 +387,12 @@ impl Compiler {
                         self.debug_str());
                 }
                 self.consume();
-            }
+            },
+            TokenType::RBRACE => {
+                return;
+            },
             _ => {
-                panic!("Unexpected token: {}", self.debug_str());
+                // panic!("Unexpected token: {}", self.debug_str());
             }
         }
     }
