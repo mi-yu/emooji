@@ -55,14 +55,13 @@ fn main() {
     Command::new("gcc")
     		.arg("-no-pie")
     		.arg("-fno-pie")
-    		.arg("-g")
-    		.arg("-o")
-    		.arg(&args[1])
     		.arg(format!("{}{}", &args[1], ".s"))
+            .arg("-o")
+            .arg(&args[1])
     		.spawn()
     		.expect("could not assemble .s file");
 
-    println!("Generated executable {}", &args[1]);
+    println!("\n\n\n\n\n\t🎉🎈🎉🎈 Success! Generated executable \'{}\', run with command \'./{}\' 🎈🎉🎈🎉\n\n\n\n\n", &args[1], &args[1]);
 
     // Command::new(format!("{}{}", "./", &args[1]))
     // 		.spawn()

@@ -18,6 +18,7 @@ impl Compiler {
     pub fn new(program: String, file: File) -> Compiler {
         let mut tokenizer = Tokenizer::new(program);
         let tokens = tokenizer.tokenize();
+        // println!("{:?}", tokens);
 
         Compiler {
             tokens: tokens,
@@ -68,6 +69,14 @@ impl Compiler {
         }
     }
 
+    fn write_print_str(&mut self) {
+        self.write("\t\tpush %rax\n\
+                    \t\tmovq $0, %rax\n\
+                    \t\tmovq $Format_strings, %rdi\n\
+                    \t\tcall printf\n\
+                    \t\tpop %rax\n");
+    }
+
     fn write_print_int(&mut self) {
         self.write("\t\tpush %rax\n\
                     \t\tmovq $0, %rax\n\
@@ -106,7 +115,18 @@ impl Compiler {
                     match self.peek() {
                         TokenType::ID => {
                             let id = self.current().value_str;
-                            content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                            let v_type = self.current().var_type;
+                            if v_type == VarType::INT || v_type == VarType::BOOL {
+                                content.push_str(&format!("\t\t{}: .quad 0\n", id));
+                            } else {
+                                // skip over LEND, ID again, and EQ
+                                self.consume();
+                                self.consume();
+                                self.consume();
+                                self.consume();
+                                let s = self.current().value_str;
+                                content.push_str(&format!("\t\t{}: .string \"{}\"\n", id, s));
+                            }
                             vars.insert(id, var_type);
                         },
                         _ => panic!("Bad instantiation. No variable name provided: {}", 
@@ -172,6 +192,8 @@ impl Compiler {
 
         self.reset();
 
+        // println!("{:?}", vars);
+
         (vars, funcs)
     }
 
@@ -182,6 +204,7 @@ impl Compiler {
             match self.peek() {
                 TokenType::ID => {
                     let id = self.current().value_str;
+                    // println!("{:?}", id);
                     if !declaring_fun {
                         match vars.get(&id) {
                             Some(var_type) => self.annotate_type(*var_type),
@@ -551,7 +574,7 @@ impl Compiler {
     }
 
     fn statement(&mut self) -> bool {
-        println!("{:?}", self.current());
+        // println!("{:?}", self.current());
         match self.peek() {
             TokenType::CALL => {
                 self.consume();
@@ -612,22 +635,31 @@ impl Compiler {
             }
             TokenType::ID => {
                 let id = self.current().value_str;
+                let v_type = self.current().var_type;
                 self.consume();
 
                 // EQ token
                 self.consume();
 
+
                 self.expression();
                 // assign value to variable
-                self.write(&format!("\t\tmovq %rax, {}\n", id));
+                if v_type != VarType::STR {
+                    self.write(&format!("\t\tmovq %rax, {}\n", id));
+                }
             },
             TokenType::PRINT => {
                 self.consume();
 
+                let format_strings = self.current().var_type == VarType::STR;
                 self.expression();
                 self.write("# printing:\n");
                 self.write("\t\tmovq %rax, %rsi\n");
-                self.write_print_int();
+                if format_strings {
+                    self.write_print_str();
+                } else {
+                    self.write_print_int();
+                }
                 self.write("# finished printing\n");
             },
             TokenType::END | TokenType::RBRACE => {
@@ -692,8 +724,11 @@ impl Compiler {
         match self.peek() {
             TokenType::VAL => {
                 let curr = self.current();
-                // println!("{:?}", curr);
-                self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
+                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
+                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
+                } else {
+                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_str));
+                }
                 self.consume();
             },
             TokenType::LPAREN => {
@@ -702,8 +737,14 @@ impl Compiler {
                 self.consume();
             },
             TokenType::ID => {
-                let id = self.current().value_str;
-                self.write(&format!("\t\tmovq {}, %rax\n", id));
+                let curr = self.current();
+                let id = curr.value_str;
+
+                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
+                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
+                } else {
+                    self.write(&format!("\t\tmovq ${}, %rax\n", id));
+                }
                 self.consume();
             },
             _ => {

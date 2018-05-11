@@ -213,7 +213,7 @@ impl Tokenizer {
                             tkn.var_type = VarType::STR;
                             TokenType::VAL
                         } else {
-                            while pos < prog.len() && is_emoji(prog[pos]) && !is_keyword(prog[pos]) {
+                            while pos < prog.len() && is_emoji(prog[pos]) && !is_keyword(prog[pos]) && prog[pos] != '🔚' {
                                 tkn.value_str.push(prog[pos]);
                                 pos += 1;
                             }
@@ -230,7 +230,7 @@ impl Tokenizer {
         }
 
         self.normalize_pos_and_state(tkn.kind);
-        // println!("{:?}", tkn);
+        // println!("{:?}, {}", tkn, self.pos);
         tkn
     }
 
@@ -265,13 +265,11 @@ impl Tokenizer {
 
     fn create_id(&self, mut start: usize) -> (usize, String) {
         let mut id = String::new();
-        while {
+        while is_emoji(self.program[start]) && self.program[start] != '🔚' {
             id.push(self.program[start]);
-            start += 1;
+            start +=1;
+        }
 
-            is_emoji(self.program[start])
-        } {}
-
-        (start, id)
+        (start - 1, id)
     }
 }
