@@ -736,21 +736,27 @@ impl Compiler {
 
     fn e2(&mut self, print: bool) {
         self.e1(print);
-        if self.peek() == TokenType::MUL {
-            while self.peek() == TokenType::MUL {
-                self.consume();
-                if print {
-                    self.write("\t\tpush %rax\n");
-                }
-                self.e1(print);
-                if print {
-                    self.write("\t\tpop %r15\n\
-                            \t\tmul %r15\n");
-                }
-            }
+        while self.peek() == TokenType::MUL || self.peek() == TokenType::DIV {
+            let t_type = self.peek();
+            self.consume();
             if print {
-                self.write("\t\tmovq $0, %r15\n");
+                self.write("\t\tpush %rax\n");
             }
+            self.e1(print);
+
+            if print {
+                match t_type {
+                    TokenType::MUL => self.write("\t\tpop %r15\n\
+                                                  \t\tmul %r15\n"),
+                    TokenType::DIV => self.write("\t\tpop %r15\n\
+                                                  \t\tdiv %r15\n\
+                                                  \t\tmovq %rdx, %rax\n"),
+                    _ => panic!("Compile error: {}", self.debug_str())
+                };
+            }
+        }
+        if print {
+            self.write("\t\tmovq $0, %r15\n");
         }
     }
 

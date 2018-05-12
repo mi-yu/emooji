@@ -1,14 +1,36 @@
 What did you propose?
 
+- We designed an emoji-based programming language and wrote a 
+compiler for it.
 
-what did you do?
+What did you do?
 
+- see above
 
 What worked?
 
+1. We got a basic type checking system in place that catches syntax
+errors and disallows weird behaviors (like adding a string and a number).
+2. There is basic support for creating and printing strings (no manipulation).
+3. Everything else from p4 works.
+4. Added division and subtraction.
 
 What didn't work?
 
+1. We didn't get around to implementing arguments for functions (ran
+out of time). However, the syntax checker does allow it!
+2. More complex operations (bitwise stuff, string concatenation)
+3. There are no signed or floating point numbers because emojis
+are a language of positivity and wholesomeness (just kidding we
+didn't have time for this either).
 
 What did you learn?
 
+1. There are not many stack overflow resources for emojis
+and assembly.
+2. Some emojis are actually made of multiple UTF8 character! Surprises
+around every corner!
+3. The Rust module system is good and so is Cargo (package manager).
+4. Designing programming languages a lot harder than it looks. We 
+had to change our language definition multiple times as things got
+more complicated and we added types.

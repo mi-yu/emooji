@@ -1,2 +1,3 @@
 member             relative contribution
-
+Dhruva			   50%
+Michael			   50%

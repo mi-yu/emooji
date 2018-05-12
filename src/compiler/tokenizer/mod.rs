@@ -37,7 +37,6 @@ pub enum TokenType {
     STR,
     VAL,
     WHILE,
-    QUOTE,
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -90,7 +89,7 @@ impl Token {
         }
         match from_type {
             VarType::BOOL => true,
-            VarType::INT => to_type != VarType::BOOL,
+            VarType::INT => true,
             VarType::STR => to_type == VarType::STR,
             _ => panic!("Internal error: cannot convert from NONE."),
         }

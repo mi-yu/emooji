@@ -16,8 +16,8 @@ fn main() {
     }
 
     // read from .moo file
-    let path = format!("{}{}", &args[1], ".moo");
-    let path = Path::new(&path);
+    let path_str = format!("{}{}", &args[1], ".moo");
+    let path = Path::new(&path_str);
 
     let mut file = match File::open(&path) {
         Err(why) => panic!("Couldn't open .moo file: {}",
@@ -27,8 +27,8 @@ fn main() {
 
     let mut program_contents = String::with_capacity(500);
     match file.read_to_string(&mut program_contents) {
-        Err(why) => panic!("Couldn't read .moo file: {}",
-                            why.description()),
+        Err(why) => panic!("Couldn't read .moo file \'{}\': {}",
+                            path_str, why.description()),
         Ok(_) => {},
     };
 
@@ -55,6 +55,7 @@ fn main() {
     Command::new("gcc")
     		.arg("-no-pie")
     		.arg("-fno-pie")
+            .arg("-g")
     		.arg(format!("{}{}", &args[1], ".s"))
             .arg("-o")
             .arg(&args[1])
