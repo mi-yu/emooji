@@ -115,8 +115,7 @@ impl Compiler {
                     match self.peek() {
                         TokenType::ID => {
                             let id = self.current().value_str;
-                            let v_type = self.current().var_type;
-                            if v_type == VarType::INT || v_type == VarType::BOOL {
+                            if var_type == VarType::INT || var_type == VarType::BOOL {
                                 content.push_str(&format!("\t\t{}: .quad 0\n", id));
                             } else {
                                 // skip over LEND, ID again, and EQ
@@ -555,8 +554,6 @@ impl Compiler {
                         \t\tcall malloc\n\
                         \t\tmovq %rax, FuncTable\n";
 
-
-
         // Write initialization data to .s file
         self.write(content);
 
@@ -610,9 +607,9 @@ impl Compiler {
                 self.expression();
                 self.write("\t\tcmp $0, %rax\n");
                 let curr_pos = self.pos;
-                self.write(&format!("\t\t je if_{}\n", curr_pos));
+                self.write(&format!("\t\tje if_{}\n", curr_pos));
                 self.statement();
-                self.write(&format!("\t\t jmp done_if_{}\n", curr_pos));
+                self.write(&format!("\t\tjmp done_if_{}\n", curr_pos));
                 self.write(&format!("if_{}:\n", curr_pos));
 
                 if self.peek() == TokenType::ELSE {
@@ -632,7 +629,16 @@ impl Compiler {
                 self.statement();
                 self.write(&format!("\t\tjmp while_{}\n", curr_pos));
                 self.write(&format!("while_done_{}:\n", curr_pos));
-            }
+            },
+            TokenType::NEW => {
+                self.consume();
+                // type token
+                self.consume();
+                // id token
+                self.consume();
+                // end punctuation
+                self.consume();
+            },
             TokenType::ID => {
                 let id = self.current().value_str;
                 let v_type = self.current().var_type;
@@ -641,19 +647,21 @@ impl Compiler {
                 // EQ token
                 self.consume();
 
-
-                self.expression();
                 // assign value to variable
                 if v_type != VarType::STR {
+                    self.expression();
                     self.write(&format!("\t\tmovq %rax, {}\n", id));
+                }
+                else {
+                    self.expression_no_print();
                 }
             },
             TokenType::PRINT => {
                 self.consume();
 
                 let format_strings = self.current().var_type == VarType::STR;
-                self.expression();
                 self.write("# printing:\n");
+                self.expression();
                 self.write("\t\tmovq %rax, %rsi\n");
                 if format_strings {
                     self.write_print_str();
@@ -674,76 +682,101 @@ impl Compiler {
     }
 
     fn expression(&mut self) {
-        self.e3();
+        self.e4(true);
+    }
+
+    fn expression_no_print(&mut self){
+        self.e4(false);
+    }
+
+    fn e4(&mut self, print: bool) {
+        self.e3(print);
         while self.peek() == TokenType::EQEQ {
             self.consume();
-            self.write("\t\tpush %rax\n");
-            self.e3();
-            self.write("\t\tpop %r15\n\
+            if print {
+                self.write("\t\tpush %rax\n");
+            }
+            self.e3(print);
+            if print {
+                self.write("\t\tpop %r15\n\
                         \t\tsubq %r15, %rax\n\
                         \t\tsete %al\n\
                         \t\tmovzbq %al, %rax\n");
+            }
         }
     }
 
-    fn e3(&mut self) {
-        self.e2();
+    fn e3(&mut self, print: bool) {
+        self.e2(print);
         while self.peek() == TokenType::PLUS || self.peek() == TokenType::MINUS {
             let t_type = self.peek();
             self.consume();
-            self.write("\t\tpush %rax\n");
-            self.e2();
+            if print {
+                self.write("\t\tpush %rax\n");
+            }
+            self.e2(print);
 
-            match t_type {
-                TokenType::PLUS => self.write("\t\tpop %r15\n\
-                                                \t\taddq %r15, %rax\n"),
-                TokenType::MINUS => self.write("\t\tmovq %rax, %r15\n\
-                                                \t\tpop %rax\n\
-                                                \t\tsubq %r15, %rax\n"),
-                _ => panic!("Compile error at {}", self.pos)
-            };
+            if print {
+                match t_type {
+                    TokenType::PLUS => self.write("\t\tpop %r15\n\
+                                                    \t\taddq %r15, %rax\n"),
+                    TokenType::MINUS => self.write("\t\tmovq %rax, %r15\n\
+                                                    \t\tpop %rax\n\
+                                                    \t\tsubq %r15, %rax\n"),
+                    _ => panic!("Compile error at {}", self.pos)
+                };
+            }
         }
     }
 
-    fn e2(&mut self) {
-        self.e1();
+    fn e2(&mut self, print: bool) {
+        self.e1(print);
         if self.peek() == TokenType::MUL {
             while self.peek() == TokenType::MUL {
                 self.consume();
-                self.write("\t\tpush %rax\n");
-                self.e1();
-                self.write("\t\tpop %r15\n\
+                if print {
+                    self.write("\t\tpush %rax\n");
+                }
+                self.e1(print);
+                if print {
+                    self.write("\t\tpop %r15\n\
                             \t\tmul %r15\n");
+                }
             }
-            
-            self.write("\t\tmovq $0, %r15\n");
+            if print {
+                self.write("\t\tmovq $0, %r15\n");
+            }
         }
     }
 
-    fn e1(&mut self) {
+    fn e1(&mut self, print: bool) {
         match self.peek() {
             TokenType::VAL => {
-                let curr = self.current();
-                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
-                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
-                } else {
-                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_str));
+                if print {
+                    let curr = self.current();
+                    if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
+                        self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
+                    } else {
+                        self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_str));
+                    }
                 }
                 self.consume();
             },
             TokenType::LPAREN => {
                 self.consume();
-                self.expression();
+                self.e4(print);
                 self.consume();
             },
             TokenType::ID => {
-                let curr = self.current();
-                let id = curr.value_str;
+                if print {
+                    let curr = self.current();
+                    let id = curr.value_str;
 
-                if curr.var_type == VarType::INT || curr.var_type == VarType::BOOL {
-                    self.write(&format!("\t\tmovq ${}, %rax\n", curr.value_int));
-                } else {
-                    self.write(&format!("\t\tmovq ${}, %rax\n", id));
+                    if curr.var_type == VarType::STR {
+                        self.write(&format!("\t\tmovq ${}, %rax\n", id));
+                    } else {
+                        self.write(&format!("\t\tmovq {}, %rax\n", id));
+                    }
                 }
                 self.consume();
             },

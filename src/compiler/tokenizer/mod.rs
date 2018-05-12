@@ -148,6 +148,7 @@ impl Tokenizer {
 
         if pos < self.program.len() {
             let prog = &self.program;
+            // println!("{}", prog[pos]);
             tkn.kind = match prog[pos] {
                 '❌' => TokenType::ELSE,
                 '❓' => TokenType::IF,
