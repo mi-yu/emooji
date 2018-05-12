@@ -612,10 +612,12 @@ impl Compiler {
                 self.write(&format!("\t\tjmp done_if_{}\n", curr_pos));
                 self.write(&format!("if_{}:\n", curr_pos));
 
+                // println!("{:?}", self.current());
                 if self.peek() == TokenType::ELSE {
                     self.consume();
                     self.statement();
                 }
+
 
                 self.write(&format!("done_if_{}:\n", curr_pos));
             },
@@ -669,6 +671,9 @@ impl Compiler {
                     self.write_print_int();
                 }
                 self.write("# finished printing\n");
+                
+                // skip over LEND
+                self.consume();
             },
             TokenType::END | TokenType::RBRACE => {
                 return false;
