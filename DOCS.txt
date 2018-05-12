@@ -8,3 +8,5 @@ Instructions:
 Note: best results on Ubuntu probably (not tested on 
 other operating systems), if a bunch of question marks
 appear in your terminal we are sorry.
+
+See here for emoji definitions: https://docs.google.com/document/d/1FOUamn9d-TlL6WKOr6PSGBGkgnHVBy30i8I91yWpN8g/edit
